@@ -3,8 +3,10 @@ const FlightSuretyApp = artifacts.require("FlightSuretyApp");
 const fs = require('fs');
 
 module.exports = function(deployer) {
-  deployer.deploy(FlightSuretyData).then(function() {
-    deployer.deploy(FlightSuretyApp).then(function() {
+
+  let firstAirline = '0x97a52a92609895d08E45098AD39Ed28AaDf02AfE';
+  deployer.deploy(FlightSuretyData, firstAirline).then(function() {
+    deployer.deploy(FlightSuretyApp, FlightSuretyData.address).then(function() {
       let config = {
         localhost: {
             url: 'http://localhost:8545',

@@ -11,20 +11,37 @@ contract FlightSuretyData {
     /********************************************************************************************/
 
     address private contractOwner;   // Account used to deploy contract
+    mapping(address => bool) authorisedCallers;
     bool private operational = true; // Blocks all state changes throughout the contract if false
+
+    struct Airline {
+        bool registered;
+        bool funded; 
+        uint256 funds;
+    }
+    uint256 private registeredAirlines = 0;
+    uint256 private fundedAirlines = 0;
+    mapping(address => Airline) private airlines;
+    
 
     /********************************************************************************************/
     /*                                       EVENT DEFINITIONS                                  */
     /********************************************************************************************/
+
+    event AirlineRegistered(address airline);
+    event AirlineFunded(address airline);
 
 
     /**
     * @dev Constructor
     *      The deploying account becomes contractOwner
     */
-    constructor() 
+    constructor(address firstAirline) payable 
     {
         contractOwner = msg.sender;
+        airlines[firstAirline] = Airline(true, false, 0);
+        registeredAirlines = 1;
+        emit AirlineRegistered(firstAirline);
     }
 
     /********************************************************************************************/
@@ -54,6 +71,29 @@ contract FlightSuretyData {
         _;
     }
 
+    modifier requireAuthorised()
+    {
+        require(msg.sender == contractOwner || authorisedCallers[msg.sender] == true, "Caller is not authorised");
+        _;
+    }
+
+    modifier requireAirlineIsRegistered(address airline)
+    {
+        require(airlines[airline].registered == true, "Data Contract Airline is not registered");
+        _;
+    }
+
+    modifier requireAirlineIsNotRegistered(address airline)
+    {
+        require(airlines[airline].registered == false, "Data Contract Airline is already registered");
+        _;
+    }
+
+    modifier requireAirlineIsFunded(address airline)
+    {
+        require(airlines[airline].funded == true, "Data contract says the airline must be funded");
+        _;
+    }
     /********************************************************************************************/
     /*                                       UTILITY FUNCTIONS                                  */
     /********************************************************************************************/
@@ -79,6 +119,23 @@ contract FlightSuretyData {
         operational = mode;
     }
 
+    function getDataContractOwner() external view returns(address) 
+    {
+        return contractOwner;
+    }
+
+    function getSender() external view returns(address)
+    {
+        return msg.sender;
+    }
+
+    function setAuthorisedCaller(address caller, bool authorised) external
+    requireAuthorised
+    {
+        authorisedCallers[caller] = authorised;
+    }
+
+
     /********************************************************************************************/
     /*                                     SMART CONTRACT FUNCTIONS                             */
     /********************************************************************************************/
@@ -86,11 +143,51 @@ contract FlightSuretyData {
    /**
     * @dev Add an airline to the registration queue
     *      Can only be called from FlightSuretyApp contract
+    * requireIsOperational
+    * requireAirlineIsNotRegistered(airline)    
     */   
-    function registerAirline()external pure
+    function registerAirline(address airline) external
+    requireIsOperational
+    requireAuthorised
+    requireAirlineIsNotRegistered(airline)
     {
+        airlines[airline] = Airline(true, false, 0);
+        airlines[airline].registered = true;
+        airlines[airline].funded = false;
+        registeredAirlines += 1;
+        emit AirlineRegistered(airline);        
     }
 
+    function fundAirline(address airline, uint256 amount) external
+    requireIsOperational
+    requireAuthorised
+    requireAirlineIsRegistered(airline)
+    {
+        airlines[airline].funds += amount;
+        airlines[airline].funded = true;
+        fundedAirlines += 1;
+        emit AirlineFunded(airline);
+    }
+
+    function isAirlineRegistered(address airline) external view returns(bool)
+    {
+        return airlines[airline].registered;
+    }
+
+    function isAirlineFunded(address airline) external view returns(bool)
+    {
+        return airlines[airline].funded;
+    }
+
+    function registeredAirlineCount() external view returns(uint256)
+    {
+        return registeredAirlines;
+    }
+
+    function fundedAirlineCount() external view returns(uint256)
+    {
+        return fundedAirlines;
+    }
 
    /**
     * @dev Buy insurance for a flight

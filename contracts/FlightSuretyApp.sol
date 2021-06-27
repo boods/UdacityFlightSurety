@@ -6,6 +6,10 @@ contract FlightSuretyApp {
     /*                                       DATA VARIABLES                                     */
     /********************************************************************************************/
 
+    uint256 private constant VOTE_FREE_AIRLINE_LIMIT = 4;
+    uint256 private constant MINIMUM_AIRLINE_FUNDING = 10;
+    mapping(address => address[]) private newAirlineVotes;
+
     // Flight status codees
     uint8 private constant STATUS_CODE_UNKNOWN = 0;
     uint8 private constant STATUS_CODE_ON_TIME = 10;
@@ -15,6 +19,7 @@ contract FlightSuretyApp {
     uint8 private constant STATUS_CODE_LATE_OTHER = 50;
 
     address private contractOwner; // Account used to deploy contract
+    FlightSuretyData flightSuretyData;
 
     struct Flight {
         bool isRegistered;
@@ -23,7 +28,7 @@ contract FlightSuretyApp {
         address airline;
     }
     mapping(bytes32 => Flight) private flights;
-
+    
  
     /********************************************************************************************/
     /*                                       FUNCTION MODIFIERS                                 */
@@ -53,13 +58,45 @@ contract FlightSuretyApp {
         _;
     }
 
+    modifier requireAirlineIsRegistered(address airline)
+    {
+        require(flightSuretyData.isAirlineRegistered(airline), "Airline is not registered");
+        _;
+    }
+
+    modifier requireAirlineIsNotRegistered(address airline)
+    {
+        require(!flightSuretyData.isAirlineRegistered(airline), "Airline is already registered");
+        _;
+    }
+
+    modifier requireAirlineIsFunded(address airline)
+    {
+        require(flightSuretyData.isAirlineFunded(airline), "Airline must be funded");
+        _;
+    }
+
+    function getAppContractOwner() public view returns(address) 
+    {
+        return contractOwner;
+    }
+
+
+    function getSender() public view returns(address)
+    {
+        return flightSuretyData.getSender();
+    }
+
+
+
     /**
     * @dev Contract constructor
     *
     */
-    constructor() 
+    constructor(address payable dataContract) 
     {
         contractOwner = msg.sender;
+        flightSuretyData = FlightSuretyData(dataContract);
     }
 
     /********************************************************************************************/
@@ -79,11 +116,62 @@ contract FlightSuretyApp {
     * @dev Add an airline to the registration queue
     *
     */   
-    function registerAirline() external pure returns(bool success, uint256 votes)
+    function registerAirline(address airline)
+        external
+        requireIsOperational
+        requireAirlineIsNotRegistered(airline)
+        requireAirlineIsFunded(msg.sender)
+        returns(bool success, uint256 votes)
     {
-        return (success, 0);
+        // If airline count is less than 4, no voting is required
+        if (flightSuretyData.registeredAirlineCount() < VOTE_FREE_AIRLINE_LIMIT)
+        {
+            flightSuretyData.registerAirline(airline);            
+            return (true, 0);
+        }
+        // Else
+        else
+        {
+            // Prevent duplicate votes
+            for (uint i = 0; i < newAirlineVotes[airline].length; i++)
+            {
+                if (newAirlineVotes[airline][i] == msg.sender)
+                {
+                    require(false, "Duplicate vote detected");
+                }
+            }
+
+            newAirlineVotes[airline].push(msg.sender);
+            if (newAirlineVotes[airline].length >= (flightSuretyData.registeredAirlineCount() / 2) )
+            {
+                flightSuretyData.registerAirline(airline);
+                return (true, newAirlineVotes[airline].length);
+            }
+            else
+            {
+                return (false, newAirlineVotes[airline].length);
+            }
+        }
     }
 
+    function fundAirline(address airline) external payable
+    requireIsOperational
+    requireAirlineIsRegistered(airline)
+    {
+        require(msg.value >= MINIMUM_AIRLINE_FUNDING);
+        payable(address(flightSuretyData)).transfer(msg.value);
+        flightSuretyData.fundAirline(airline, msg.value);
+    }
+
+    function isAirlineRegistered(address airline) external view returns(bool)
+    {
+        return flightSuretyData.isAirlineRegistered(airline);
+    }
+
+    function isAirlineFunded(address airline) external view returns(bool)
+    {
+        return flightSuretyData.isAirlineFunded(airline);
+    }
 
    /**
     * @dev Register a future flight for insuring.
@@ -273,4 +361,15 @@ contract FlightSuretyApp {
 
         return random;
     }
+}
+
+abstract contract FlightSuretyData {
+    function getSender() virtual external view returns(address);
+    function getDataContractOwner() virtual external view returns(address);
+    function registerAirline(address airline) virtual external;
+    function fundAirline(address airline, uint256 amount) virtual external;
+    function isAirlineRegistered(address airline) virtual external view returns(bool);
+    function isAirlineFunded(address airline) virtual external view returns(bool);
+    function registeredAirlineCount() virtual external view returns(uint256);
+    function fundedAirlineCount() virtual external view returns(uint256);
 }
