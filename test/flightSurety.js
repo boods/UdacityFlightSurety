@@ -23,97 +23,6 @@ contract("Flight Surety Tests", async (accounts) => {
         assert.equal(result, true, "First airline should be registered");    
     });
 
-    it(`Only existing airline may register a new airline until there are at least four airlines registered`, async function () {
-
-        // The first four airlines can't register themselves
-        try {
-            await config.flightSuretyApp.registerAirline(accounts[2], {from: accounts[2]});
-            assert.equal(false, "Airline should be unable to register itself as its not funded, and implicitly not registered");
-        } catch (e) {
-            let result = await config.flightSuretyApp.isAirlineRegistered(accounts[2]);        
-            assert.equal(false, result, "registerAirline should have failed");    
-        }
-
-        // The first airline is not able to register other airlines until it is funded
-        try {
-            await config.flightSuretyApp.registerAirline(accounts[2], {from: confirm.firstAirline});
-            assert.equal(false, "First airline is not yet funded");
-        } catch (e) {
-            let result = await config.flightSuretyApp.isAirlineRegistered(accounts[2]);        
-            assert.equal(false, result, "registerAirline should have failed because first airline is not funded");    
-        }
-
-        // Fund the first airline
-        if (!await config.flightSuretyApp.isAirlineFunded(config.firstAirline))
-        {
-            try {
-                const txn = await config.flightSuretyApp.fundAirline(config.firstAirline, {from: config.firstAirline, value: 10 });                
-                let newTx = await truffleAssert.createTransactionResult(config.flightSuretyData, txn.tx);
-                truffleAssert.eventEmitted(newTx, 'AirlineFunded');                
-            } catch (e) {
-                assert.fail(`fund call failed: ${e}`);
-            }
-        }
-
-        const firstAirlineIsRegistered = await config.flightSuretyApp.isAirlineRegistered(config.firstAirline);
-        assert.equal(true, firstAirlineIsRegistered, "First airline should be registered");
-
-        const firstAirlineIsFunded = await config.flightSuretyApp.isAirlineFunded(config.firstAirline);
-        assert.equal(true, firstAirlineIsFunded, "First airline should now be funded");
-
-        // Regsiter the next 3 airlines
-        console.log(accounts[2]);
-        const txn2 = await config.flightSuretyApp.registerAirline(accounts[2], {from: config.firstAirline});
-        let newTx2 = await truffleAssert.createTransactionResult(config.flightSuretyData, txn2.tx);
-        truffleAssert.eventEmitted(newTx2, 'AirlineRegistered');   
-        assert.equal(true, await config.flightSuretyApp.isAirlineRegistered(accounts[2]));        
-        
-        console.log(accounts[3]);
-        const txn3 = await config.flightSuretyApp.registerAirline(accounts[3], {from: config.firstAirline});
-        let newTxn3 = await truffleAssert.createTransactionResult(config.flightSuretyData, txn3.tx);
-        truffleAssert.eventEmitted(newTxn3, 'AirlineRegistered');   
-        assert.equal(true, await config.flightSuretyApp.isAirlineRegistered(accounts[3]));        
-        
-        console.log(accounts[4]);
-        const txn4 = await config.flightSuretyApp.registerAirline(accounts[4], {from: config.firstAirline});
-        let newTxn4 = await truffleAssert.createTransactionResult(config.flightSuretyData, txn4.tx);
-        truffleAssert.eventEmitted(newTxn4, 'AirlineRegistered');   
-        assert.equal(true, await config.flightSuretyApp.isAirlineRegistered(accounts[4]));        
-        
-        // The fifth registration should return false
-        let txn5 = await config.flightSuretyApp.registerAirline(accounts[5], {from: config.firstAirline});
-        let newTxn5 = await truffleAssert.createTransactionResult(config.flightSuretyData, txn5.tx);
-        truffleAssert.eventNotEmitted(newTxn5, 'AirlineRegistered');   
-        assert.equal(false, await config.flightSuretyApp.isAirlineRegistered(accounts[5]));
-
-        assert.equal(4, await config.flightSuretyData.registeredAirlineCount());
-
-        // Fund the other airlines, so they can vote
-        console.log("Fund:", accounts[2]);
-        const fundTxn2 = await config.flightSuretyApp.fundAirline(accounts[2], {from: config.firstAirline, value: 10 });                
-        let newFundTx2 = await truffleAssert.createTransactionResult(config.flightSuretyData, fundTxn2.tx);
-        truffleAssert.eventEmitted(newFundTx2, 'AirlineFunded');                
-
-        console.log("Fund:", accounts[3]);
-        const fundTxn3 = await config.flightSuretyApp.fundAirline(accounts[3], {from: config.firstAirline, value: 10 });                
-        let newFundTx3 = await truffleAssert.createTransactionResult(config.flightSuretyData, fundTxn3.tx);
-        truffleAssert.eventEmitted(newFundTx3, 'AirlineFunded');                
-
-        console.log("Fund:", accounts[4]);
-        const fundTxn4 = await config.flightSuretyApp.fundAirline(accounts[4], {from: config.firstAirline, value: 10 });                
-        let newFundTx4 = await truffleAssert.createTransactionResult(config.flightSuretyData, fundTxn4.tx);
-        truffleAssert.eventEmitted(newFundTx4, 'AirlineFunded');
-        
-        assert.equal(true, await config.flightSuretyApp.isAirlineFunded(accounts[2]), "Airline should now be funded");
-        assert.equal(true, await config.flightSuretyApp.isAirlineFunded(accounts[3]), "Airline should now be funded");
-        assert.equal(true, await config.flightSuretyApp.isAirlineFunded(accounts[4]), "Airline should now be funded");
-
-        // Now register the next airline - this should provide enough consensus to access account[5]
-        txn5 = await config.flightSuretyApp.registerAirline(accounts[5], {from: accounts[2]});
-        newTx5 = await truffleAssert.createTransactionResult(config.flightSuretyData, txn5.tx);
-        truffleAssert.eventEmitted(newTx5, 'AirlineRegistered');   
-        assert.equal(true, await config.flightSuretyApp.isAirlineRegistered(accounts[5]));
-    });
 
 
     it(`(multiparty) can block access to setOperatingStatus() for non-Contract Owner account`, async function () {
@@ -164,26 +73,86 @@ contract("Flight Surety Tests", async (accounts) => {
         await config.flightSuretyData.setOperatingStatus(true);
   
     });
-  
-    it('(airline) cannot register an Airline using registerAirline() if it is not funded', async () => {
-      
-      // ARRANGE
-      let newAirline = accounts[2];
-  
-      // ACT
-      try {
-          await config.flightSuretyApp.registerAirline(newAirline, {from: config.firstAirline});
-      }
-      catch(e) {
-  
-      }
 
-      // TODO: Implement this...
-      // let result = await config.flightSuretyData.isAirline.call(newAirline); 
-  
-      // ASSERT
-      // assert.equal(result, false, "Airline should not be able to register another airline if it hasn't provided funding");
-  
+    async function registerAirline(airline, airlineRegistrar, expectedResult, message)
+    {
+        try
+        {
+            const txn = await config.flightSuretyApp.registerAirline(airline, {from: airlineRegistrar});
+            const newTx = await truffleAssert.createTransactionResult(config.flightSuretyData, txn.tx);
+            if (expectedResult)
+            {
+                truffleAssert.eventEmitted(newTx, 'AirlineRegistered', `eventEmitted: ${message}`);   
+            }
+        }
+        catch(e) {
+        }        
+        const airlineRegistered = await config.flightSuretyApp.isAirlineRegistered(airline);
+        assert.equal(expectedResult, airlineRegistered, `isAirlineRegistered: ${message}`);        
+    }
+
+    async function fundAirline(airline, funder, fundingValue, expectedResult, message)
+    {
+        try
+        {
+            const fundTxn = await config.flightSuretyApp.fundAirline(airline, {from: funder, value: fundingValue });                
+            let newFundTx = await truffleAssert.createTransactionResult(config.flightSuretyData, fundTxn.tx);
+            if (expectedResult)
+            {
+                truffleAssert.eventEmitted(newFundTx, 'AirlineFunded', `eventEmitted: ${message}`);                
+            }
+        } catch (e) {            
+        }
+
+        const isFunded = await config.flightSuretyApp.isAirlineFunded(config.firstAirline);
+        assert.equal(expectedResult, isFunded, `isAirlineFunded: ${message}`);
+    }
+
+    it('(airline) cannot register an Airline using registerAirline() if it is not funded', async () => {
+        await registerAirline(accounts[2], config.firstAirline, false, 
+            "Airline should not be able to register another airline if it hasn't provided funding");
     });
-  
+
+    it('(airline) cannot register iteself', async () => {
+        await registerAirline(accounts[2], accounts[2], false, 
+            "Airline should be unable to register itself as its not funded, and implicitly not registered");
+    });
+
+    it(`Only existing airline may register a new airline until there are at least four airlines registered`, async function () {
+
+        // Fund the first airline
+        if (!await config.flightSuretyApp.isAirlineFunded(config.firstAirline))
+        {
+            try {
+                const txn = await config.flightSuretyApp.fundAirline(config.firstAirline, {from: config.firstAirline, value: 10 });                
+                let newTx = await truffleAssert.createTransactionResult(config.flightSuretyData, txn.tx);
+                truffleAssert.eventEmitted(newTx, 'AirlineFunded');                
+            } catch (e) {
+                assert.fail(`fund call failed: ${e}`);
+            }
+        }
+
+        const firstAirlineIsRegistered = await config.flightSuretyApp.isAirlineRegistered(config.firstAirline);
+        assert.equal(true, firstAirlineIsRegistered, "First airline should be registered");
+
+        const firstAirlineIsFunded = await config.flightSuretyApp.isAirlineFunded(config.firstAirline);
+        assert.equal(true, firstAirlineIsFunded, "First airline should now be funded");
+
+        // Regsiter the next 3 airlines
+        await registerAirline(accounts[2], config.firstAirline, true, "firstAirline can register accounts[2]");
+        await registerAirline(accounts[3], config.firstAirline, true, "firstAirline can register accounts[3]");
+        await registerAirline(accounts[4], config.firstAirline, true, "firstAirline can register accounts[4]");
+        await registerAirline(accounts[5], config.firstAirline, false, "firstAirline can't register accounts[5] without consensus");
+
+        assert.equal(4, await config.flightSuretyData.registeredAirlineCount());
+
+        // Fund the other airlines, so they can vote
+        await fundAirline(accounts[2], config.firstAirline, 10, true, "firstAirline can fund accounts[2]");
+        await fundAirline(accounts[3], config.firstAirline, 10, true, "firstAirline can fund accounts[3]");
+        await fundAirline(accounts[4], config.firstAirline, 10, true, "firstAirline can fund accounts[4]");
+        
+        // Now register the next airline - this should provide enough consensus to access account[5]
+        await registerAirline(accounts[5], accounts[2], true, "account[2] can finalise registration for accounts[5]");
+    });
+    
 });
